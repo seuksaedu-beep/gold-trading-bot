@@ -208,6 +208,32 @@ class TradingBot:
     async def cmd_sessions(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("معلومات الجلسات:", reply_markup=session_keyboard())
 
+    async def cmd_backtest(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        msg = await update.message.reply_text("🧪 جاري تشغيل الاختبار الخلفي لمدة 30 يوماً...\nالرجاء الانتظار (قد يستغرق دقيقة)")
+        try:
+            from analysis.backtester import WalkForwardBacktester
+            bt = WalkForwardBacktester(update.effective_user.id)
+            args = context.args
+            tf = "1H"
+            days = 30
+            if args:
+                for a in args:
+                    if a.lower() in ("1m", "5m", "15m", "30m", "1h", "4h", "d"):
+                        tf = {"1m": "1m", "5m": "5m", "15m": "15m", "30m": "30m", "1h": "1H", "4h": "4H", "d": "D"}.get(a.lower(), "1H")
+                    try:
+                        days = min(365, max(1, int(a)))
+                    except ValueError:
+                        pass
+            result = await bt.run_backtest(
+                capital=self._get_user_settings(update.effective_user.id).capital,
+                timeframe=tf,
+                days=days,
+            )
+            await msg.edit_text(bt.format_backtest_summary(result), parse_mode="Markdown", reply_markup=back_button())
+        except Exception as e:
+            logger.error("Backtest error", exc_info=True)
+            await msg.edit_text(f"❌ خطأ في الاختبار الخلفي: {e}")
+
     async def cmd_news(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         msg = await update.message.reply_text("جاري تحميل الأخبار...")
         try:
@@ -262,6 +288,22 @@ class TradingBot:
         else:
             self._awaiting_input[user_id] = "risk_pct"
             await update.message.reply_text("أدخل نسبة المخاطرة (0.1 - 5):", reply_markup=back_button())
+
+    async def cmd_setconfidence(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        user_id = update.effective_user.id
+        if context.args:
+            try:
+                val = float(context.args[0])
+                if val < 60 or val > 100:
+                    await update.message.reply_text("❌ النسبة يجب أن تكون بين 60 و 100")
+                    return
+                update_user_settings(user_id, min_confidence=val)
+                await update.message.reply_text(f"✅ تم تعيين أقل نسبة ثقة: {val}%")
+            except ValueError:
+                await update.message.reply_text("❌ قيمة غير صالحة. استخدم: /setconfidence 85")
+        else:
+            self._awaiting_input[user_id] = "min_confidence"
+            await update.message.reply_text("أدخل أقل نسبة ثقة (60-100):", reply_markup=back_button())
 
     async def cmd_setmaxtrades(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         user_id = update.effective_user.id
@@ -710,7 +752,28 @@ class TradingBot:
 
         # ── Backtest ──
         if data == "cb_run_backtest":
-            await query.answer("🧪 سيتم إضافة خاصية الاختبار الخلفي قريباً", show_alert=True)
+            await query.edit_message_text("🧪 جاري تشغيل الاختبار الخلفي الكامل لجميع الفريمات...")
+            try:
+                from analysis.backtester import WalkForwardBacktester
+                s = self._get_user_settings(user_id)
+                bt = WalkForwardBacktester(user_id)
+                full = await bt.run_full_backtest(capital=s.capital, days=30, min_confidence=85)
+                text = "*🔬 نتائج الاختبار الخلفي (30 يوم)*\n\n"
+                for tf, r in full.get("results", {}).items():
+                    if "error" in r:
+                        text += f"• *{tf}*: ⚠️ خطأ\n"
+                    elif r.get("total_trades", 0) == 0:
+                        text += f"• *{tf}*: ⚪ 0 صفقات\n"
+                    else:
+                        emoji = "🟢" if r.get("total_pnl", 0) > 0 else "🔴"
+                        text += f"• *{tf}*: {emoji} {r.get('total_trades', 0)} صفقة | ربح: {r.get('win_rate', 0)}% | PnL: ${r.get('total_pnl', 0):.2f} | Sharpe: {r.get('sharpe_ratio', 0)}\n"
+                best = full.get("best_timeframe")
+                if best:
+                    text += f"\n🏆 *أفضل فريم:* {best} (Sharpe: {full.get('best_sharpe', 0)})"
+                await query.edit_message_text(text, parse_mode="Markdown", reply_markup=back_button())
+            except Exception as e:
+                logger.error("Backtest full error", exc_info=True)
+                await query.edit_message_text(f"❌ خطأ: {e}")
             return
 
         if data == "cb_past_backtests":
@@ -728,8 +791,22 @@ class TradingBot:
                 await query.edit_message_text(f"خطأ: {e}")
             return
 
+        if data.startswith("cb_bt_tf_"):
+            tf = data.replace("cb_bt_tf_", "")
+            await query.edit_message_text(f"🧪 جاري اختبار فريم {tf}...")
+            try:
+                from analysis.backtester import WalkForwardBacktester
+                s = self._get_user_settings(user_id)
+                bt = WalkForwardBacktester(user_id)
+                result = await bt.run_backtest(capital=s.capital, timeframe=tf, days=30, min_confidence=85)
+                await query.edit_message_text(bt.format_backtest_summary(result), parse_mode="Markdown", reply_markup=back_button())
+            except Exception as e:
+                logger.error("Backtest TF error", exc_info=True)
+                await query.edit_message_text(f"❌ خطأ: {e}")
+            return
+
         if data == "cb_backtest_settings":
-            await query.answer("⚙️ إعدادات الاختبار الخلفي قادمة قريباً", show_alert=True)
+            await query.answer("⚙️ استخدم الأمر /backtest مع الفريم والمدة (مثال: /backtest 1H 30)", show_alert=True)
             return
 
         # ── Alerts ──
@@ -881,8 +958,10 @@ class TradingBot:
             CommandHandler("capital", self.cmd_capital),
             CommandHandler("risk", self.cmd_risk),
             CommandHandler("setmaxtrades", self.cmd_setmaxtrades),
+            CommandHandler("setconfidence", self.cmd_setconfidence),
             CommandHandler("status", self.cmd_status),
             CommandHandler("tf", self.cmd_tf),
+            CommandHandler("backtest", self.cmd_backtest),
         ]
         for h in handlers:
             app.add_handler(h)

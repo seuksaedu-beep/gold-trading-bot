@@ -44,7 +44,7 @@ class Trade(Base):
 class UserSettings(Base):
     __tablename__ = "user_settings"
 
-    id = Column(Integer, primary_key=True, default=1)
+    id = Column(Integer, primary_key=True, autoincrement=True)
     user_id = Column(Integer, unique=True)
     is_active = Column(Boolean, default=True)
     capital = Column(Float, default=50.0)

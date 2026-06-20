@@ -139,13 +139,24 @@ def back_button(callback: str = "cb_main_menu"):
 def backtest_keyboard():
     keyboard = [
         [
-            InlineKeyboardButton("▶️ بدء اختبار خلفي", callback_data="cb_run_backtest"),
+            InlineKeyboardButton("▶️ جميع الفريمات", callback_data="cb_run_backtest"),
+        ],
+        [
+            InlineKeyboardButton("1m", callback_data="cb_bt_tf_1m"),
+            InlineKeyboardButton("5m", callback_data="cb_bt_tf_5m"),
+            InlineKeyboardButton("15m", callback_data="cb_bt_tf_15m"),
+            InlineKeyboardButton("30m", callback_data="cb_bt_tf_30m"),
+        ],
+        [
+            InlineKeyboardButton("1H", callback_data="cb_bt_tf_1H"),
+            InlineKeyboardButton("4H", callback_data="cb_bt_tf_4H"),
+            InlineKeyboardButton("D", callback_data="cb_bt_tf_D"),
         ],
         [
             InlineKeyboardButton("نتائج سابقة", callback_data="cb_past_backtests"),
         ],
         [
-            InlineKeyboardButton("إعدادات الاختبار", callback_data="cb_backtest_settings"),
+            InlineKeyboardButton("⚙️教育ات", callback_data="cb_backtest_settings"),
         ],
         [
             InlineKeyboardButton("🔙 القائمة الرئيسية", callback_data="cb_main_menu"),
