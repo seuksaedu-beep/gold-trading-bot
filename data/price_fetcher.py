@@ -32,10 +32,10 @@ class RealPriceFetcher:
 
     async def fetch_gold_price(self) -> Optional[float]:
         sources = [
-            self._fetch_yahoo_gold,
-            self._fetch_from_goldapi,
-            self._fetch_from_metalpriceapi,
-            self._fetch_from_gold_live,
+            self._fetch_from_goldapi,         # Real-time XAU Spot (fast, reliable)
+            self._fetch_from_metalpriceapi,   # Real-time XAU Spot (backup)
+            self._fetch_yahoo_gold,           # GC=F Futures (may have delay)
+            self._fetch_from_gold_live,       # Live gold price
             self._fallback_simulated,
         ]
         for source in sources:
@@ -50,8 +50,8 @@ class RealPriceFetcher:
         return 2350.0
 
     async def _fetch_yahoo_gold(self) -> Optional[float]:
-        if self._is_cached("gold", 15):
-            return self._get_cached("gold")
+        if self._is_cached("gold_yahoo", 15):
+            return self._get_cached("gold_yahoo")
         async with httpx.AsyncClient(timeout=10) as client:
             resp = await client.get(
                 "https://query1.finance.yahoo.com/v8/finance/chart/GC=F",

@@ -6,6 +6,8 @@ from typing import Optional
 
 from data.price_fetcher import RealPriceFetcher
 from data.mt5_provider import get_mt5
+from data.oanda_provider import OandaProvider
+from config import settings
 
 logger = logging.getLogger(__name__)
 
@@ -14,11 +16,17 @@ class MarketDataProvider:
     def __init__(self):
         self.logger = logging.getLogger(__name__)
         self.fetcher = RealPriceFetcher()
+        self.oanda = OandaProvider(
+            api_key=settings.OANDA_API_KEY,
+            account_id=settings.OANDA_ACCOUNT_ID,
+        )
         self._last_prices = {
             "XAUUSD": 2345.50, "DXY": 104.35, "VIX": 15.2,
             "USOIL": 78.45, "SP500": 4830.50, "US10Y": 4.48, "US2Y": 4.82,
         }
         self._data_source = "api"
+        if self.oanda.is_enabled():
+            self._data_source = "oanda"
 
     def _is_valid_gold(self, price: float) -> bool:
         return 1800 <= price <= 3500
@@ -35,6 +43,18 @@ class MarketDataProvider:
                 elif symbol != "XAUUSD":
                     self._data_source = "mt5"
                     return price
+        except:
+            pass
+        return None
+
+    async def _try_oanda_price(self) -> Optional[float]:
+        if not self.oanda.is_enabled():
+            return None
+        try:
+            price_data = await self.oanda.get_price(settings.OANDA_INSTRUMENT)
+            if price_data and self._is_valid_gold(price_data["price"]):
+                self._data_source = "oanda"
+                return price_data["price"]
         except:
             pass
         return None
@@ -61,6 +81,10 @@ class MarketDataProvider:
         if mt5_price:
             self._last_prices["XAUUSD"] = mt5_price
             return mt5_price
+        oanda_price = await self._try_oanda_price()
+        if oanda_price:
+            self._last_prices["XAUUSD"] = oanda_price
+            return oanda_price
         real = await self.fetcher.fetch_gold_price()
         self._last_prices["XAUUSD"] = real
         self._data_source = "api"

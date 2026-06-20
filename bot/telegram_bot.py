@@ -851,7 +851,7 @@ class TradingBot:
                             continue
             except Exception as e:
                 logger.error("Alert loop error", exc_info=True)
-            await asyncio.sleep(300)
+            await asyncio.sleep(60)
 
     # ── build app & run ────────────────────────────────────────
 

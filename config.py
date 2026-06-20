@@ -29,6 +29,9 @@ class Settings(BaseSettings):
     ALPHA_VANTAGE_KEY: str = ""
     NEWS_API_KEY: str = ""
     FRED_API_KEY: str = ""
+    OANDA_API_KEY: str = ""
+    OANDA_ACCOUNT_ID: str = ""
+    OANDA_INSTRUMENT: str = "XAU_USD"
 
     ANALYSIS_INTERVAL_MINUTES: int = 15
     ENABLE_AUTO_ANALYSIS: bool = True
