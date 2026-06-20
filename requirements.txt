@@ -7,3 +7,4 @@ fastapi>=0.100
 uvicorn>=0.20
 aiofiles>=23.0
 Pillow>=10.0
+numpy>=1.24
